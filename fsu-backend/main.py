@@ -3,10 +3,20 @@ from sqlalchemy.orm import Session
 from database import SessionLocal, PlayerStats
 from typing import List
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Query
+from sqlalchemy.sql import func
 
 app = FastAPI()
 
-# Dependency to get the database session
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 def get_db():
     db = SessionLocal()
     try:
@@ -14,7 +24,6 @@ def get_db():
     finally:
         db.close()
 
-# Request model for search filters
 class SearchRequest(BaseModel):
     player_name: str = None
     position: str = None
@@ -32,19 +41,40 @@ def get_players(db: Session = Depends(get_db)):
     return {"data": players}
 
 @app.post("/search")
-def search_players(search: SearchRequest, db: Session = Depends(get_db)):
-    query = db.query(PlayerStats)
-
+def search_players(
+    search: SearchRequest, 
+    db: Session = Depends(get_db),
+    skip: int = Query(0, alias="offset"),  
+    limit: int = Query(3, alias="limit")   
+):
+    filtered_query = db.query(PlayerStats)
+    
     if search.player_name:
-        query = query.filter(PlayerStats.player_name.ilike(f"%{search.player_name}%"))
+        filtered_query = filtered_query.filter(PlayerStats.player_name.ilike(f"%{search.player_name}%"))
     if search.position:
-        query = query.filter(PlayerStats.position == search.position)
+        filtered_query = filtered_query.filter(PlayerStats.position == search.position)
     if search.season:
-        query = query.filter(PlayerStats.season == search.season)
+        filtered_query = filtered_query.filter(PlayerStats.season == search.season)
     if search.opponent:
-        query = query.filter(PlayerStats.opponent == search.opponent)
+        filtered_query = filtered_query.filter(PlayerStats.opponent == search.opponent)
     if search.game_type:
-        query = query.filter(PlayerStats.game_type == search.game_type)
+        filtered_query = filtered_query.filter(PlayerStats.game_type == search.game_type)
 
-    results = query.all()
-    return {"data": results}
+    total_count = filtered_query.count()
+
+    paginated_query = (
+        filtered_query
+        .order_by(
+            PlayerStats.date.desc(),  
+            PlayerStats.id.asc()      
+        )
+        .offset(skip * limit)  
+        .limit(limit)
+    )
+
+    results = paginated_query.all()
+
+    return {
+        "total": total_count, 
+        "data": results
+    }
