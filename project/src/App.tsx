@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Search } from "lucide-react";
 import axios from "axios";
+import posthog from "posthog-js";
 
 type Position =
   | "QB"
@@ -61,6 +62,9 @@ function App() {
   const [limit, setLimit] = useState(3);
 
   const [loading, setLoading] = useState(false);
+  posthog.init("phc_Avy01zk0BseMMK5fHYUu94ai7Ats7gTjC3tClw6CXt8", {
+    api_host: "https://us.i.posthog.com",
+  });
 
   useEffect(() => {
     handleSearch({ preventDefault: () => {} });
